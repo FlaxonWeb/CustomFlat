@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Bedrock Custom Super Flat Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body onload="doInit();" class="main">
+
+<header>
+    <a href="#" class="logo">Bedrock Generator</a>
+    <nav class="navigation">
+        <a href="#superflat">Super Flat</a>
+        <a href="#singlebiome">Single Biome</a>
+    </nav>
+</header>
+
+<section class="content">
+    <h2 class="title">Select World Type</h2>
+    <select name="worldType" id="worldType" onchange="worldTypeSelect();">
+        <option value="default">-- Select World Type --</option>
+        <option value="superflat">Custom Super Flat</option>
+        <option value="singlebiome">Single Biome</option>
+    </select>
+</section>
+
+<div id="superflat" class="section-style" style="display:none;">
+    <h3 class="title">Custom Super Flat Settings</h3>
+    <table id="blockTable" class="blocktable"></table>
+    <table>
+        <tr>
+            <td><select name="blockSelect" id="blockSelect"></select></td>
+            <td><input id="blockCount" name="blockCount" type="number" min="1" max="384"></td>
+            <td><button name="addButton" onclick="addLayer();">Add</button></td>    
+        </tr>
+    </table>
+    <table>
+        <tr><td>World Name</td><td><input id="worldName" name="worldName"></td></tr>
+        <tr><td>Prevent Slimes Spawning</td><td><input id="noSlimes" name="noSlimes" type="checkbox" onclick="onNoSlimeClick();"></td></tr>
+        <tr><td>Seed</td><td><input id="seed" name="seed"></td></tr>
+        <tr><td>Biome</td><td><select name="biomeSelect" id="biomeSelect"></select></td></tr>
+        <tr><td><button name="generateButton" onclick="generateWorldFile();">Generate</button></td></tr>
+    </table>
+</div>
+
+<div id="singlebiome" class="section-style" style="display:none;">
+    <h3 class="title">Single Biome Settings</h3>
+    <table>
+        <tr><td>World Name</td><td><input id="worldName2" name="worldName2"></td></tr>
+        <tr><td>Seed</td><td><input id="seed2" name="seed2"></td></tr>
+        <tr><td>Single Biome</td><td><select name="biomeSelect2" id="biomeSelect2"></select></td></tr>
+        <tr><td><button name="generateButton2" onclick="generateWorldFile2();">Generate</button></td></tr>
+    </table>
+</div>
+
+<script>
+    var test={bid:0,count:4};
+var blockList=[];
+var biomeList=[];
+var layers=[];
+var paddingLayer;
+
+var doInit=function()
+{
+    initBlockList();
+    initBiomeList();
+    document.getElementById("worldName").value="Custom Super Flat";
+    document.getElementById("worldName2").value="Single Biome";
+}
+
+var initBlockList=function()
+{
+    var req=new XMLHttpRequest();
+    req.onload = (e) => {
+        blockList=req.response.blockList;
+        renderBlockSelect();
+        initPaddingLayer();
+        resetBlockSelect();
+    }
+    req.open("GET.html","GetBlockList");
+    req.responseType="json";
+    req.send();
+}
+
+var initBiomeList=function()
+{
+    var req=new XMLHttpRequest();
+    req.onload = (e) => {
+        biomeList=req.response.biomeList;
+        renderBiomeSelect();
+    }
+    req.open("GET.html","GetBiomeList");
+    req.responseType="json";
+    req.send();
+}
+
+var renderTable=function()
+{
+    var output='';
+    var y=getHeight()-64;
+    y--;
+    for(var i=0;i<layers.length;i++)
+    {
+        output+=renderRow(layers[i], i, y);
+        y-=layers[i].count;
+    }
+
+    var blockTable=document.getElementById("blockTable");
+    blockTable.innerHTML=output;
+}
+
+var renderRow=function(layer, idx, y)
+{
+    var block=blockList[layer.bid];
+    var blockName=block.name;
+    var bottomy=y-(layer.count-1);
+    var ytext='Y: '+bottomy+' → '+y;
+    if(bottomy===y) ytext='Y: '+y;
+    var rowHtml='<tr><td><button type="button" onclick="del(' + idx +')">✖</button></td><td class="layercount">' + layer.count + '</td><td class="blockname">' + blockName + '</td><td class="ylevel"><div>' + ytext + '</div></td><td><button type="button"  onclick="up(' + idx +')">▲</button></td><td><button type="button" onclick="down(' + idx +')">▼</button></td></tr>\n';
+    if(layer==paddingLayer) rowHtml='<tr><td></td><td class="layercount">' + layer.count + '</td><td class="blockname">' + blockName + ' (slime prevention)</td><td class="ylevel"><div>' + ytext + '</div></td><td></td><td></td></tr>\n';
+    return rowHtml;
+}
+
+var initPaddingLayer=function()
+{
+    for(var i=0;i<blockList.length;i++)
+    {
+        var block=blockList[i];
+        if(block.name==="Air")
+        {
+            paddingLayer={bid:block.id,count:0};
+            break;
+        }
+    }
+}
+
+var renderBlockSelect=function()
+{
+    var output='';
+    for(var i=0;i<blockList.length;i++)
+    {
+        var block=blockList[i];
+        output+='<option value="' + block.id + '">' + block.name + '</option>\n';
+    }
+
+    var blockSelect=document.getElementById("blockSelect");
+    blockSelect.innerHTML=output;
+}
+
+var renderBiomeSelect=function()
+{
+    var output='';
+    for(var i=0;i<biomeList.length;i++)
+    {
+        var biome=biomeList[i];
+        if(biome.name==="plains") output+='<option value="' + biome.name + '" selected="selected">' + biome.displayName + '</option>\n';
+        else output+='<option value="' + biome.name + '">' + biome.displayName + '</option>\n';
+    }
+
+    var biomeSelect2=document.getElementById("biomeSelect2");
+    biomeSelect2.innerHTML=output;
+
+    var biomeSelect2=document.getElementById("biomeSelect");
+    biomeSelect.innerHTML=output;
+}
+
+var del=function(idx)
+{
+    layers.splice(idx,1);
+    updatePaddingLayer();
+    renderTable();
+}
+
+var up=function(idx)
+{
+    if(idx===0) return;
+    var tmp=layers[idx-1];
+    layers[idx-1]=layers[idx];
+    layers[idx]=tmp;
+    updatePaddingLayer();
+    renderTable();
+}
+
+var down=function(idx)
+{
+    if(idx>=layers.length-1) return;
+    var tmp=layers[idx+1];
+    if(tmp==paddingLayer) return;
+    layers[idx+1]=layers[idx];
+    layers[idx]=tmp;
+    updatePaddingLayer();
+    renderTable();
+}
+
+var getHeight=function()
+{
+    var total=0;
+    for(var i=0;i<layers.length;i++)
+    {
+        total+=layers[i].count;
+    }
+    return total
+}
+
+var addLayer=function()
+{
+    var blockSelect=document.getElementById("blockSelect");
+    var idx=blockSelect.value;
+    if(idx===undefined||idx===null||idx==="") return;
+    var blockCount=document.getElementById("blockCount");
+    var count=Number(blockCount.value);
+    if(getHeight()+count>=384)
+    {
+        alert("new layer does not fit in world height limit (384 blocks from -64)");
+        return;
+    }
+    layers.splice(0,0,{bid:idx,count:count});
+    blockSelect.value="";
+    count.value="";
+    updatePaddingLayer();
+    renderTable();
+    resetBlockSelect();
+}
+
+var resetBlockSelect=function()
+{
+    document.getElementById("blockSelect").value="";
+    document.getElementById("blockCount").value=1;
+}
+
+var generateWorldFile=function()
+{
+    var worldName=document.getElementById("worldName").value;
+    var postContent={"worldName":worldName,"layers":layers,"survival":true,"bonusChest":true, singleBiome:false};
+    var seedText=document.getElementById("seed").value;
+    var seed=new Number(seedText);
+
+    if(seed!=NaN) postContent.seedText=seedText;
+
+    var biome=document.getElementById("biomeSelect").value;
+    postContent.biomeOverride=biome;
+
+    var count=blockCount.value;
+    var req=new XMLHttpRequest();
+    req.onload = (e) => {
+        var link=document.createElement('a');
+        link.href=window.URL.createObjectURL(req.response);
+        link.download=worldName+".mcworld";
+        link.click();
+    }
+    req.open("POST.html","BuildWorldFile");
+
+    req.responseType="blob";
+    req.send(JSON.stringify(postContent));
+}
+
+var generateWorldFile2=function()
+{
+    var worldName=document.getElementById("worldName2").value;
+    var biome=document.getElementById("biomeSelect2").value;
+    var seedText=document.getElementById("seed2").value;
+
+    var seed=new Number(document.getElementById("seed2").value);
+    var postContent={"worldName":worldName,"survival":true,"bonusChest":true,"biomeOverride":biome, singleBiome:true};
+    if(seed!=NaN)
+    {
+        postContent={"worldName":worldName,"survival":true,"bonusChest":true,"biomeOverride":biome,"seedText":seedText, singleBiome:true};
+    }
+    var count=blockCount.value;
+    var req=new XMLHttpRequest();
+    req.onload = (e) => {
+        var link=document.createElement('a');
+        link.href=window.URL.createObjectURL(req.response);
+        link.download=worldName+".mcworld";
+        link.click();
+    }
+    req.open("POST.html","BuildWorldFile");
+
+    req.responseType="blob";
+    req.send(JSON.stringify(postContent));
+}
+
+var updatePaddingLayer=function()
+{
+    var lastLayer=layers[layers.length-1];
+    if(document.getElementById('noSlimes').checked)
+    {
+        var height=getHeight();
+        if(lastLayer==paddingLayer) height-=paddingLayer.count;
+        if(height<64+40) paddingLayer.count=(64+40)-height;
+        else paddingLayer.count=0;
+
+        if(lastLayer!=paddingLayer) layers[layers.length]=paddingLayer;
+    }
+    else
+    {
+        paddingLayer.count=0;
+    }
+    if(lastLayer==paddingLayer && paddingLayer.count==0) layers.splice(layers.length-1,1);
+}
+
+var onNoSlimeClick=function()
+{
+    updatePaddingLayer();
+    renderTable();
+}
+
+var worldTypeSelect=function()
+{
+    var divId=document.getElementById("worldType").value;
+    if(divId==="superflat")
+    {
+        document.getElementById("superflat").style.display="inherit";
+        document.getElementById("singlebiome").style.display="none";
+    }
+    if(divId==="singlebiome")
+    {
+        document.getElementById("superflat").style.display="none";
+        document.getElementById("singlebiome").style.display="inherit";
+    }
+    if(divId==="default")
+    {
+        document.getElementById("superflat").style.display="none";
+        document.getElementById("singlebiome").style.display="none";
+    }
+}
+</script>
+</body>
+</html>
